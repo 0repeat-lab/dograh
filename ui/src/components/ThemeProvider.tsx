@@ -1,7 +1,7 @@
 "use client";
 
 // Thin wrapper around next-themes so the root (server) layout can mount a theme
-// provider without pulling client-only code into the server module graph. Dark
+// provider without pulling client-only code into the server module graph. Light
 // is the locked default; the system preference is intentionally not consulted.
 
 import { ThemeProvider as NextThemesProvider } from "next-themes";
