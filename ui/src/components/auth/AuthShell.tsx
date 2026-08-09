@@ -42,11 +42,23 @@ export function AuthShell({
 
       {/* Brand / value panel (RIGHT) — hidden on mobile */}
       <aside className="relative hidden flex-col justify-between overflow-hidden border-l border-border/60 bg-zinc-950 p-10 lg:flex xl:p-14">
-        {/* Ambient depth: soft radial glow behind the content */}
+        {/* Ambient depth: ElevenLabs-style gradient orbs behind the content.
+            Multi-color (indigo / violet / pink), heavily blurred — the brand's
+            signature vibrancy against the near-black panel. Decorative only. */}
         <div
           aria-hidden
-          className="pointer-events-none absolute -right-24 top-1/3 size-[28rem] rounded-full opacity-20 blur-3xl"
-          style={{ background: "radial-gradient(circle, var(--cta), transparent 70%)" }}
+          className="pointer-events-none absolute -right-32 -top-28 size-[34rem] rounded-full opacity-[0.32] blur-[110px]"
+          style={{ background: "radial-gradient(circle at 35% 35%, #6EA8FF, transparent 62%)" }}
+        />
+        <div
+          aria-hidden
+          className="pointer-events-none absolute -bottom-44 right-6 size-[30rem] rounded-full opacity-[0.26] blur-[110px]"
+          style={{ background: "radial-gradient(circle at 50% 50%, #B46EFF, transparent 62%)" }}
+        />
+        <div
+          aria-hidden
+          className="pointer-events-none absolute top-1/2 right-1/3 size-[22rem] rounded-full opacity-[0.2] blur-[90px]"
+          style={{ background: "radial-gradient(circle at 50% 50%, #F06AB8, transparent 62%)" }}
         />
 
         <div className="relative">
