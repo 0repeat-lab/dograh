@@ -42,23 +42,24 @@ export default function RootLayout({
 }) {
 
   return (
-    <html lang="en" suppressHydrationWarning>
+    <html lang="en" className="dark" suppressHydrationWarning>
       <head>
-        {/* Inline script to prevent flash of dark theme - runs before React hydrates.
-            Light is the locked default: only an explicit stored 'dark' opts out. */}
+        {/* Inline script to prevent flash of light theme - runs before React hydrates.
+            Dark is the locked default (Nexus Analytics Dashboard): only an
+            explicit stored 'light' opts out. */}
         <script
           dangerouslySetInnerHTML={{
             __html: `
               (function() {
                 try {
                   var theme = localStorage.getItem('theme');
-                  if (theme === 'dark') {
-                    document.documentElement.classList.add('dark');
-                  } else {
+                  if (theme === 'light') {
                     document.documentElement.classList.remove('dark');
+                  } else {
+                    document.documentElement.classList.add('dark');
                   }
                 } catch (e) {
-                  document.documentElement.classList.remove('dark');
+                  document.documentElement.classList.add('dark');
                 }
               })();
             `,
@@ -67,7 +68,7 @@ export default function RootLayout({
       </head>
       <body
         className={`${inter.variable} ${jetbrainsMono.variable} font-sans antialiased`}>
-        <ThemeProvider attribute="class" defaultTheme="light" enableSystem={false} disableTransitionOnChange>
+        <ThemeProvider attribute="class" defaultTheme="dark" enableSystem={false} disableTransitionOnChange>
           <SentryErrorBoundary>
             <AuthProvider>
               <AppConfigProvider>
