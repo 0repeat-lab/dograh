@@ -45,6 +45,10 @@ ENV BACKEND_URL="http://api:8000"
 # Build the application with standalone mode
 # Increase Node.js heap size to prevent out-of-memory errors during build
 ENV NODE_OPTIONS="--max-old-space-size=4096"
+# Verifiable build marker: git short SHA this image was built from.
+# Surfaced via NEXT_PUBLIC_BUILD_ID so /api/config/version can report it.
+ARG GIT_SHA=unknown
+ENV NEXT_PUBLIC_BUILD_ID="0r.${GIT_SHA}"
 RUN npm run build && \
     rm -rf /tmp/* /root/.npm /root/.next/cache
 

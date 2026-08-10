@@ -71,6 +71,7 @@ export async function GET() {
 
   return NextResponse.json({
     ui: uiVersion,
+    buildId: process.env.NEXT_PUBLIC_BUILD_ID || null,
     api: apiVersion,
     deploymentMode,
     authProvider,

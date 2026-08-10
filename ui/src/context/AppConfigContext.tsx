@@ -10,6 +10,7 @@ type BackendStatus = 'reachable' | 'unreachable';
 interface AppConfig {
     uiVersion: string;
     apiVersion: string;
+    buildId: string | null;
     deploymentMode: string;
     authProvider: string;
     turnEnabled: boolean;
@@ -36,6 +37,7 @@ interface AppConfigContextType {
 const defaultConfig: AppConfig = {
     uiVersion: 'dev',
     apiVersion: 'unavailable',
+    buildId: null,
     deploymentMode: 'oss',
     authProvider: 'local',
     turnEnabled: false,
@@ -88,6 +90,7 @@ export function AppConfigProvider({ children }: { children: ReactNode }) {
             setConfig({
                 uiVersion: data.ui || 'dev',
                 apiVersion: data.api || 'unknown',
+                buildId: typeof data.buildId === 'string' && data.buildId.length > 0 ? data.buildId : null,
                 deploymentMode: data.deploymentMode || 'oss',
                 authProvider: data.authProvider || 'local',
                 turnEnabled: Boolean(data.turnEnabled),
