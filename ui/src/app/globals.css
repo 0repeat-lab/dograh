@@ -1,3 +1,8 @@
+/* Hallmark · redesign · system: Nexus Analytics Dashboard
+ * anchor: slate-400 #94A3B8 on near-black canvas · monochrome (no vivid hue)
+ * type: Inter (display/body) + JetBrains Mono (labels/metrics)
+ * radius: 14px (card + control) · pill 9999px · tokens via named CSS vars */
+
 @import "tailwindcss";
 
 @plugin "tailwindcss-animate";
@@ -47,85 +52,85 @@
 }
 
 :root {
-  --radius: 0.625rem;
-  --card: oklch(0.965 0.004 85);
+  /* Nexus Analytics Dashboard — light variant (Nexus is dark-first; this is the
+     coherent fallback). Monochrome slate on paper, black primary CTA. */
+  --radius: 0.875rem; /* Nexus card + control radius = 14px */
+  --background: oklch(1 0 0);
+  --foreground: oklch(0.145 0 0);
+  --card: oklch(0.985 0.001 255);
   --card-foreground: oklch(0.145 0 0);
   --popover: oklch(1 0 0);
   --popover-foreground: oklch(0.145 0 0);
-  --primary: oklch(0.205 0 0);
+  --primary: oklch(0.145 0 0);
   --primary-foreground: oklch(0.985 0 0);
-  --secondary: oklch(0.965 0.004 85);
-  --secondary-foreground: oklch(0.205 0 0);
-  --muted: oklch(0.965 0.004 85);
-  --muted-foreground: oklch(0.52 0.013 70);
-  --accent: oklch(0.965 0.004 85);
-  --accent-foreground: oklch(0.205 0 0);
+  --secondary: oklch(0.965 0.004 255);
+  --secondary-foreground: oklch(0.145 0 0);
+  --muted: oklch(0.965 0.004 255);
+  --muted-foreground: oklch(0.52 0.012 250);
+  --accent: oklch(0.965 0.004 255);
+  --accent-foreground: oklch(0.145 0 0);
   --destructive: oklch(0.577 0.245 27.325);
-  --border: oklch(0.922 0 0);
-  --input: oklch(0.922 0 0);
-  --ring: oklch(0.62 0.13 260);
-  --chart-1: oklch(0.646 0.222 41.116);
-  --chart-2: oklch(0.6 0.118 184.704);
-  --chart-3: oklch(0.398 0.07 227.392);
-  --chart-4: oklch(0.828 0.189 84.429);
-  --chart-5: oklch(0.769 0.188 70.08);
-  --sidebar: oklch(0.985 0.003 85);
+  --border: oklch(0.922 0.004 255);
+  --input: oklch(0.922 0.004 255);
+  --ring: oklch(0.52 0.012 250);
+  --chart-1: oklch(0.21 0 0);
+  --chart-2: oklch(0.52 0.012 250);
+  --chart-3: oklch(0.7 0.018 250);
+  --chart-4: oklch(0.82 0.006 250);
+  --chart-5: oklch(0.6 0.01 250);
+  --sidebar: oklch(0.985 0.001 255);
   --sidebar-foreground: oklch(0.145 0 0);
-  --sidebar-primary: oklch(0.205 0 0);
+  --sidebar-primary: oklch(0.145 0 0);
   --sidebar-primary-foreground: oklch(0.985 0 0);
-  --sidebar-accent: oklch(0.965 0.004 85);
-  --sidebar-accent-foreground: oklch(0.205 0 0);
-  --sidebar-border: oklch(0.922 0 0);
-  --sidebar-ring: oklch(0.62 0.13 260);
-  --background: oklch(1 0 0);
-  --foreground: oklch(0.145 0 0);
-  /* ElevenLabs-inspired accent: a vivid signal blue used on primary CTAs,
-     focus rings, and the active sidebar marker. Paired with the gradient
-     orbs in the auth brand panel for the brand's signature vibrancy. */
-  --cta: oklch(0.6 0.16 260);
+  --sidebar-accent: oklch(0.965 0.004 255);
+  --sidebar-accent-foreground: oklch(0.145 0 0);
+  --sidebar-border: oklch(0.922 0.004 255);
+  --sidebar-ring: oklch(0.52 0.012 250);
+  /* Nexus accent: slate-600. Monochrome signal — no vivid hue. */
+  --cta: oklch(0.52 0.012 250);
   --cta-foreground: oklch(0.985 0 0);
-  /* Giant faded "dograh" wordmark (authentic Proxima Nova letterforms traced
-     from the brand logo PNG — the font is commercial, so the lettering ships
-     as static artwork in /public; fill + 0.9% opacity are baked into the
-     files). Theme-switched here; consumed by .app-surface and .auth-imprint. */
   --brand-imprint: url("/brand-imprint-light.svg");
 }
 
 .dark {
-  --background: oklch(0.12 0 0);
+  /* Nexus Analytics Dashboard — the locked default. Near-black canvas, white
+     ink, slate-400 (#94A3B8) as the single accent across muted text, focus
+     rings, hairline borders, and the auth brand motif. Modular panels, 14px
+     radius, JetBrains-Mono metric labels. Monochrome — no vivid hue. */
+  --background: oklch(0.13 0 0);
   --foreground: oklch(0.985 0 0);
-  --card: oklch(0.185 0 0);
+  --card: oklch(0.185 0.004 255);
   --card-foreground: oklch(0.985 0 0);
-  --popover: oklch(0.185 0 0);
+  --popover: oklch(0.185 0.004 255);
   --popover-foreground: oklch(0.985 0 0);
-  --primary: oklch(0.922 0 0);
-  --primary-foreground: oklch(0.205 0 0);
-  --secondary: oklch(0.24 0 0);
+  --primary: oklch(0.985 0 0);
+  --primary-foreground: oklch(0.145 0 0);
+  --secondary: oklch(0.235 0.004 255);
   --secondary-foreground: oklch(0.985 0 0);
-  --muted: oklch(0.24 0 0);
-  --muted-foreground: oklch(0.66 0 0);
-  --accent: oklch(0.24 0 0);
+  --muted: oklch(0.205 0.003 255);
+  --muted-foreground: oklch(0.7 0.018 250);
+  --accent: oklch(0.7 0.018 250 / 12%);
   --accent-foreground: oklch(0.985 0 0);
-  --destructive: oklch(0.704 0.191 22.216);
-  --border: oklch(1 0 0 / 10%);
-  --input: oklch(1 0 0 / 15%);
-  --ring: oklch(0.68 0.14 260);
-  --chart-1: oklch(0.488 0.243 264.376);
-  --chart-2: oklch(0.696 0.17 162.48);
-  --chart-3: oklch(0.769 0.188 70.08);
-  --chart-4: oklch(0.627 0.265 303.9);
-  --chart-5: oklch(0.645 0.246 16.439);
-  --sidebar: oklch(0.185 0 0);
+  --destructive: oklch(0.627 0.21 25);
+  --border: oklch(0.7 0.018 250 / 14%);
+  --input: oklch(0.7 0.018 250 / 16%);
+  --ring: oklch(0.7 0.018 250 / 55%);
+  --chart-1: oklch(0.96 0 0);
+  --chart-2: oklch(0.7 0.018 250);
+  --chart-3: oklch(0.52 0.012 250);
+  --chart-4: oklch(0.38 0.008 250);
+  --chart-5: oklch(0.82 0.006 250);
+  --sidebar: oklch(0.16 0.003 255);
   --sidebar-foreground: oklch(0.985 0 0);
-  --sidebar-primary: oklch(0.62 0.15 260);
-  --sidebar-primary-foreground: oklch(0.985 0 0);
-  --sidebar-accent: oklch(0.24 0 0);
+  --sidebar-primary: oklch(0.985 0 0);
+  --sidebar-primary-foreground: oklch(0.145 0 0);
+  --sidebar-accent: oklch(0.7 0.018 250 / 12%);
   --sidebar-accent-foreground: oklch(0.985 0 0);
-  --sidebar-border: oklch(1 0 0 / 10%);
-  --sidebar-ring: oklch(0.68 0.14 260);
-  /* Signal blue, brighter against the near-black surfaces. */
-  --cta: oklch(0.68 0.16 260);
-  --cta-foreground: oklch(0.985 0 0);
+  --sidebar-border: oklch(0.7 0.018 250 / 12%);
+  --sidebar-ring: oklch(0.7 0.018 250 / 55%);
+  /* Slate-400 accent — the single signal colour, brighter on near-black. */
+  --cta: oklch(0.7 0.018 250);
+  --cta-foreground: oklch(0.13 0 0);
   --brand-imprint: url("/brand-imprint-dark.svg");
 }
 
@@ -153,7 +158,7 @@
 }
 
 /* Attention pulse applied by OnboardingTooltip to the element its arrow points
-   at; removed automatically when the tooltip is dismissed. Blue matches the
+   at; removed automatically when the tooltip is dismissed. Slate matches the
    tooltip body so the ring and the callout read as one unit. Two shadow layers:
    a constant outline so the target stays highlighted between pulses, plus an
    expanding wave, with a slight breathing scale on top. */
@@ -164,8 +169,8 @@
 @keyframes onboarding-pulse {
   0% {
     box-shadow:
-      0 0 0 3px rgba(59, 130, 246, 0.75),
-      0 0 0 3px rgba(59, 130, 246, 0.6);
+      0 0 0 3px rgba(148, 163, 184, 0.75),
+      0 0 0 3px rgba(148, 163, 184, 0.6);
     transform: scale(1);
   }
   40% {
@@ -173,21 +178,21 @@
   }
   70% {
     box-shadow:
-      0 0 0 3px rgba(59, 130, 246, 0.75),
-      0 0 0 18px rgba(59, 130, 246, 0);
+      0 0 0 3px rgba(148, 163, 184, 0.75),
+      0 0 0 18px rgba(148, 163, 184, 0);
     transform: scale(1);
   }
   100% {
     box-shadow:
-      0 0 0 3px rgba(59, 130, 246, 0.75),
-      0 0 0 18px rgba(59, 130, 246, 0);
+      0 0 0 3px rgba(148, 163, 184, 0.75),
+      0 0 0 18px rgba(148, 163, 184, 0);
   }
 }
 
 @media (prefers-reduced-motion: reduce) {
   .onboarding-pulse {
     animation: none;
-    box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.6);
+    box-shadow: 0 0 0 3px rgba(148, 163, 184, 0.6);
   }
 }
 
