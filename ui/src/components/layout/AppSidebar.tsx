@@ -170,7 +170,7 @@ export function AppSidebar() {
   const isCollapsed = !isMobile && state === "collapsed";
 
   // Version info from app config context
-  const versionInfo = config ? { ui: config.uiVersion, api: config.apiVersion } : null;
+  const versionInfo = config ? { ui: config.uiVersion, api: config.apiVersion, build: config.buildId } : null;
 
   // Check for updates only on self-hosted (OSS) deployments — cloud is managed for the user.
   const { latest: latestRelease, isBehind, isLatest } = useLatestReleaseVersion(
@@ -333,7 +333,7 @@ export function AppSidebar() {
                   className="notranslate text-xs font-normal text-muted-foreground"
                   translate="no"
                 >
-                  v{versionInfo.ui}
+                  v{versionInfo.ui}{versionInfo.build ? ` · ${versionInfo.build}` : ""}
                 </span>
               )}
             </Link>
