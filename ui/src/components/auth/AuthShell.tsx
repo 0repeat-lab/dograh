@@ -41,24 +41,19 @@ export function AuthShell({
       </main>
 
       {/* Brand / value panel (RIGHT) — hidden on mobile */}
-      <aside className="relative hidden flex-col justify-between overflow-hidden border-l border-border/60 bg-zinc-950 p-10 lg:flex xl:p-14">
-        {/* Ambient depth: ElevenLabs-style gradient orbs behind the content.
-            Multi-color (indigo / violet / pink), heavily blurred — the brand's
-            signature vibrancy against the near-black panel. Decorative only. */}
+      <aside className="nexus-grid relative hidden flex-col justify-between overflow-hidden border-l border-border/60 bg-zinc-950 p-10 lg:flex xl:p-14">
+        {/* Ambient depth: Nexus motif — one monochrome slate bloom plus the
+            hairline analytics grid (.nexus-grid on the panel). Slate-400 is
+            the system's single accent; no vivid hue anywhere. Decorative only. */}
         <div
           aria-hidden
-          className="pointer-events-none absolute -right-32 -top-28 size-[34rem] rounded-full opacity-[0.32] blur-[110px]"
-          style={{ background: "radial-gradient(circle at 35% 35%, #6EA8FF, transparent 62%)" }}
+          className="pointer-events-none absolute -right-32 -top-28 size-[34rem] rounded-full opacity-[0.3] blur-[110px]"
+          style={{ background: "radial-gradient(circle at 35% 35%, oklch(0.62 0.02 250), transparent 62%)" }}
         />
         <div
           aria-hidden
-          className="pointer-events-none absolute -bottom-44 right-6 size-[30rem] rounded-full opacity-[0.26] blur-[110px]"
-          style={{ background: "radial-gradient(circle at 50% 50%, #B46EFF, transparent 62%)" }}
-        />
-        <div
-          aria-hidden
-          className="pointer-events-none absolute top-1/2 right-1/3 size-[22rem] rounded-full opacity-[0.2] blur-[90px]"
-          style={{ background: "radial-gradient(circle at 50% 50%, #F06AB8, transparent 62%)" }}
+          className="pointer-events-none absolute -bottom-44 right-6 size-[30rem] rounded-full opacity-[0.2] blur-[110px]"
+          style={{ background: "radial-gradient(circle at 50% 50%, oklch(0.48 0.015 250), transparent 62%)" }}
         />
 
         <div className="relative">
@@ -73,14 +68,13 @@ export function AuthShell({
             {HIGHLIGHTS.map((point) => (
               <li
                 key={point}
-                className="rounded-full border border-white/10 bg-white/[0.04] px-3 py-1 text-xs font-medium text-zinc-300"
+                className="rounded-full border border-white/10 bg-white/[0.04] px-3 py-1 font-mono text-[11px] font-medium tracking-wide text-zinc-300"
               >
                 {point}
               </li>
             ))}
           </ul>
         </div>
-
         {/* Enterprise CTA block (Bland-style) — bottom margin lifts it off the
             viewport edge while justify-between keeps the column layout */}
         <div className="relative mb-12 max-w-md space-y-3 rounded-xl border border-white/10 bg-white/[0.03] p-5 xl:mb-16">

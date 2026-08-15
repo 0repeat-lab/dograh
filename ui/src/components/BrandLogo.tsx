@@ -20,9 +20,10 @@ function VoiceOrbMark({ className }: { className?: string }) {
     <svg viewBox="0 0 32 32" className={cn("block h-auto", className)} role="img" aria-label="Dograh">
       <defs>
         <linearGradient id={ORB_GRADIENT_ID} x1="2" y1="2" x2="30" y2="30" gradientUnits="userSpaceOnUse">
-          <stop offset="0" stopColor="#6EA8FF" />
-          <stop offset="0.5" stopColor="#9B6BFF" />
-          <stop offset="1" stopColor="#F06AB8" />
+          {/* Nexus: monochrome slate ramp — depth without hue. */}
+          <stop offset="0" stopColor="#CBD5E1" />
+          <stop offset="0.5" stopColor="#94A3B8" />
+          <stop offset="1" stopColor="#64748B" />
         </linearGradient>
       </defs>
       <rect x="0" y="0" width="32" height="32" rx="9" fill={`url(#${ORB_GRADIENT_ID})`} />

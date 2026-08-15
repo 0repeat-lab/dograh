@@ -416,7 +416,7 @@ export function AppSidebar() {
             {section.label && (
               <SidebarGroupLabel
                 className={cn(
-                  "notranslate text-xs font-semibold uppercase tracking-wider text-muted-foreground",
+                  "notranslate font-mono text-[10px] font-medium uppercase tracking-[0.14em] text-muted-foreground",
                   isCollapsed && "hidden"
                 )}
                 translate="no"

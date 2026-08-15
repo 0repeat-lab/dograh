@@ -245,7 +245,7 @@
      paints inside .app-surface, which starts right of the ~270px sidebar —
      the +135px x-shift recentres the wordmark on the VISIBLE canvas. */
   .app-surface {
-    background-color: oklch(0.984 0.001 80);
+    background-color: oklch(0.975 0.003 255);
     background-image: var(--brand-imprint);
     background-size: min(68vw, 980px) auto;
     background-position: calc(50% + 135px) calc(100% - 24px);
@@ -259,7 +259,7 @@
     }
   }
   .dark .app-surface {
-    background-color: oklch(0.12 0 0);
+    background-color: oklch(0.13 0.001 255);
   }
 
   /* Giant faded "dograh" imprint for the auth pages (applied to the AuthShell
@@ -274,6 +274,16 @@
   }
 
 }
+
+  /* Nexus hairline analytics grid — the auth brand panel's base texture.
+     Slate hairlines at 44px pitch, barely-there; carries the "analytics
+     dashboard" identity without any hue or gradient. */
+  .nexus-grid {
+    background-image:
+      linear-gradient(oklch(0.7 0.018 250 / 6%) 1px, transparent 1px),
+      linear-gradient(90deg, oklch(0.7 0.018 250 / 6%) 1px, transparent 1px);
+    background-size: 44px 44px;
+  }
 
 /* ---------------------------------------------------------------------------
    UN-LAYERED overrides. These intentionally live OUTSIDE @layer blocks:
@@ -291,11 +301,13 @@
 /* Flat carbon-charcoal panel with a soft light glow along the LEFT edge:
    a 1px highlight line plus an inner bloom fading rightwards. */
 .dark .app-sidebar-dock [data-slot="sidebar-inner"] {
-  border-color: rgb(255 255 255 / 0.1);
-  background-color: oklch(0.18 0.002 80);
+  /* Nexus: slate-tinted charcoal panel (hue 255, not warm 80) with a slate
+     hairline edge and a soft light glow along the LEFT edge. */
+  border-color: oklch(0.7 0.018 250 / 14%);
+  background-color: oklch(0.185 0.004 255);
   box-shadow:
-    inset 1px 0 0 rgb(255 255 255 / 0.1),
-    inset 3px 0 6px -4px rgb(255 255 255 / 0.08),
+    inset 1px 0 0 rgb(255 255 255 / 0.08),
+    inset 3px 0 6px -4px rgb(255 255 255 / 0.06),
     0 24px 50px -14px rgb(0 0 0 / 0.85);
 }
 
