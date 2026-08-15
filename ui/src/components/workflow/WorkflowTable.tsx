@@ -149,17 +149,17 @@ export function WorkflowTable({
                                 key={workflow.id}
                                 className={`hover:bg-accent transition-colors ${showArchived ? 'opacity-60' : ''}`}
                             >
-                                <TableCell className="text-muted-foreground">
+                                <TableCell className="font-mono text-muted-foreground">
                                     {workflow.id}
                                 </TableCell>
                                 <TableCell className="font-medium">
                                     {workflow.name}
                                 </TableCell>
-                                <TableCell>
+                                <TableCell className="font-mono text-sm text-muted-foreground">
                                     {formatDate(workflow.created_at, organizationTimezone)}
                                 </TableCell>
                                 <TableCell className="text-center">
-                                    <span className="inline-flex items-center justify-center min-w-[2rem] px-2 py-1 text-sm font-semibold bg-muted rounded-full">
+                                    <span className="inline-flex items-center justify-center min-w-[2rem] px-2 py-1 font-mono text-sm font-semibold tabular-nums bg-muted rounded-full">
                                         {workflow.total_runs || 0}
                                     </span>
                                 </TableCell>
