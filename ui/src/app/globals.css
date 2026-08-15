@@ -288,9 +288,8 @@
   /* Nexus metric label — the system's dashboard signature. Mono, uppercase,
      tracked, slate. Applied to table headers, tabs, and card metadata. */
   .nexus-metric {
-    font-family: var(--font-mono);
     font-size: 0.6875rem;
-    font-weight: 500;
+    font-family: var(--font-jetbrains-mono), ui-monospace, monospace;
     text-transform: uppercase;
     letter-spacing: 0.14em;
   }
