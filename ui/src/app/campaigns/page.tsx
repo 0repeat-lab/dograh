@@ -93,19 +93,20 @@ export default function CampaignsPage() {
     };
 
     return (
-        <div className="container mx-auto p-6 space-y-6">
+        <div className="container mx-auto p-6 space-y-8 max-w-7xl">
             <div className="flex justify-between items-center">
                 <div>
-                    <h1 className="text-3xl font-bold mb-2">Campaigns</h1>
-                    <p>Manage your bulk workflow execution campaigns</p>
+                    <div className="nexus-metric text-muted-foreground mb-2">BULK EXECUTION</div>
+                    <h1 className="text-4xl font-bold tracking-tight mb-2">Campaigns</h1>
+                    <p className="text-muted-foreground">Manage your bulk workflow execution campaigns</p>
                 </div>
-                    <Button onClick={handleCreateCampaign}>
+                    <Button onClick={handleCreateCampaign} className="rounded-xl">
                         <Plus className="h-4 w-4 mr-2" />
                         Create Campaign
                     </Button>
                 </div>
 
-                <Card>
+                <Card className="card-weave border-border/60">
                     <CardHeader>
                         <CardTitle>All Campaigns</CardTitle>
                         <CardDescription>

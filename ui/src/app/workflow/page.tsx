@@ -75,7 +75,8 @@ async function WorkflowList() {
             <>
                 {/* Active Workflows Section */}
                 <div className="mb-8">
-                    <h2 className="text-xl font-semibold mb-4">Active Agents</h2>
+                    <div className="nexus-metric text-muted-foreground mb-3">VOICE AGENTS</div>
+                    <h2 className="text-2xl font-semibold mb-4 tracking-tight">Active Agents</h2>
                     {activeWorkflows.length > 0 || folders.length > 0 ? (
                         <AgentFolderView workflows={activeWorkflows} folders={folders} />
                     ) : (
@@ -110,11 +111,15 @@ async function PageContent() {
     const workflowList = await WorkflowList();
 
     return (
-        <div className="container mx-auto px-4 py-8">
+        <div className="container mx-auto px-4 py-8 max-w-7xl">
             {/* Your Workflows Section */}
-            <div className="mb-6">
-                <div className="flex justify-between items-center mb-6">
-                    <h1 className="text-2xl font-bold">Your Agents</h1>
+            <div className="mb-8">
+                <div className="flex justify-between items-center mb-8">
+                    <div>
+                        <div className="nexus-metric text-muted-foreground mb-2">WORKFLOW BUILDER</div>
+                        <h1 className="text-4xl font-bold tracking-tight">Your Agents</h1>
+                        <p className="text-muted-foreground text-sm mt-1">Create and manage your voice AI agents</p>
+                    </div>
                     <div className="flex gap-2">
                         <UploadWorkflowButton />
                         <CreateFolderButton />

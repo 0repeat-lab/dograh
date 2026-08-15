@@ -84,21 +84,21 @@ export function CreateWorkflowButton() {
     return (
         <DropdownMenu>
             <DropdownMenuTrigger asChild>
-                <Button disabled={isCreating}>
+                <Button disabled={isCreating} className="rounded-xl">
                     <PlusIcon className="w-4 h-4" />
                     {isCreating ? 'Creating...' : 'Create Agent'}
                     <ChevronDown className="w-4 h-4" />
                 </Button>
             </DropdownMenuTrigger>
-            <DropdownMenuContent align="end">
-                <DropdownMenuItem onClick={handleAgentBuilder} className="cursor-pointer">
+            <DropdownMenuContent align="end" className="rounded-xl border-border/60">
+                <DropdownMenuItem onClick={handleAgentBuilder} className="cursor-pointer rounded-lg">
                     <Bot className="w-4 h-4 mr-2" />
                     <div>
                         <div className="font-medium">Use Agent Builder</div>
                         <div className="text-xs text-muted-foreground">AI generates a workflow from your description</div>
                     </div>
                 </DropdownMenuItem>
-                <DropdownMenuItem onClick={handleBlankCanvas} disabled={isCreating} className="cursor-pointer">
+                <DropdownMenuItem onClick={handleBlankCanvas} disabled={isCreating} className="cursor-pointer rounded-lg">
                     <LayoutTemplate className="w-4 h-4 mr-2" />
                     <div>
                         <div className="font-medium">Blank Canvas</div>
