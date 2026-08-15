@@ -330,7 +330,7 @@ export function AppSidebar() {
               <BrandLogo mark className="h-6" />
               {versionInfo && (
                 <span
-                  className="notranslate text-xs font-normal text-muted-foreground"
+                  className="notranslate inline-flex items-center rounded-md border bg-muted/50 px-1.5 py-0.5 font-mono text-[10px] font-medium leading-none text-foreground/75"
                   translate="no"
                 >
                   v{versionInfo.ui}{versionInfo.build ? ` · ${versionInfo.build}` : ""}
@@ -377,6 +377,28 @@ export function AppSidebar() {
             )}
           </SidebarTrigger>
         </div>
+
+          {/* Collapsed: brand mark stays reachable, version on hover. */}
+          {isCollapsed && (
+            <Tooltip>
+              <TooltipTrigger asChild>
+                <Link
+                  href="/"
+                  className="notranslate mx-auto flex items-center justify-center py-1"
+                  aria-label="Dograh home"
+                >
+                  <BrandLogo mark className="h-6" />
+                </Link>
+              </TooltipTrigger>
+              <TooltipContent side="bottom">
+                <p className="font-mono">
+                  {versionInfo
+                    ? `v${versionInfo.ui}${versionInfo.build ? ` · ${versionInfo.build}` : ""}`
+                    : "Dograh"}
+                </p>
+              </TooltipContent>
+            </Tooltip>
+          )}
 
         {provider === "stack" && (
           <div className={cn("mt-3 notranslate", isCollapsed && "hidden")} translate="no">
