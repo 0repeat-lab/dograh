@@ -1,0 +1,19 @@
+name: Netcheck (VPS reachability)
+
+on:
+  workflow_dispatch:
+
+jobs:
+  netcheck:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Probe vps.0repeat.com
+        run: |
+          echo "runner ip:"; curl -s -m 10 https://api.github.com/meta | jq -r '.actions[]' > /tmp/cidrs.txt 2>/dev/null || true
+          curl -s -m 10 ifconfig.me || true; echo
+          echo "dns:"; getent hosts vps.0repeat.com || true
+          for i in 1 2 3; do
+            echo "attempt $i:"
+            curl -s -o /dev/null -w "  http:%{http_code} connect:%{time_connect}s total:%{time_total}s\n" -m 15 https://vps.0repeat.com/api/health || echo "  FAILED (exit $?)"
+            sleep 5
+          done
