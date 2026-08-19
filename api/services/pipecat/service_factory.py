@@ -1,5 +1,5 @@
 from functools import wraps
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, Any
 from urllib.parse import urlencode, urlparse, urlunparse
 
 import aiohttp
@@ -984,9 +984,14 @@ def create_llm_service_from_provider(
             **kwargs,
         )
     elif provider == ServiceProviders.GROQ.value:
+        groq_extra: dict[str, Any] = {}
+        if model.startswith("openai/gpt-oss"):
+            # gpt-oss reasoning models: low effort keeps the analysis channel
+            # short (no leakage into spoken text, much lower latency).
+            groq_extra["reasoning_effort"] = "low"
         return GroqLLMService(
             api_key=api_key,
-            settings=GroqLLMSettings(model=model, temperature=0.1),
+            settings=GroqLLMSettings(model=model, temperature=0.1, extra=groq_extra),
         )
     elif provider == ServiceProviders.OPENROUTER.value:
         kwargs = {}
