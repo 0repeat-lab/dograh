@@ -65,7 +65,7 @@ jobs:
         run: |
           set -e
           CUR=$(curl -fsS -H "x-api-key: $DOKPLOY_KEY" -G "https://vps.0repeat.com/api/compose.one" --data-urlencode "composeId=$COMPOSE_ID" | jq -r .composeFile)
-          NEW=$(printf '%s\n' "$CUR" | sed -E "s#image: dograh-api:custom#image: $SHA_TAG#")
+          NEW=$(printf '%s\n' "$CUR" | sed -E "s#image: [^[:space:]]*dograh-api[^[:space:]]*#image: $SHA_TAG#")
           if ! grep -q "$SHA_TAG" <<<"$NEW"; then
             echo "ERROR: api image line not found in compose" >&2
             exit 1
