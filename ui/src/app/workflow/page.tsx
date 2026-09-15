@@ -8,7 +8,7 @@ import { CreateWorkflowButton } from "@/components/workflow/CreateWorkflowButton
 import { AgentFolderView } from '@/components/workflow/folders/AgentFolderView';
 import { CreateFolderButton } from '@/components/workflow/folders/CreateFolderButton';
 import { FolderSection } from '@/components/workflow/folders/FolderSection';
-import { UploadWorkflowButton } from '@/components/workflow/UploadWorkflowButton";
+import { UploadWorkflowButton } from '@/components/workflow/UploadWorkflowButton';
 import { getServerAccessToken, getServerAuthProvider } from '@/lib/auth/server';
 import logger from '@/lib/logger';
 
