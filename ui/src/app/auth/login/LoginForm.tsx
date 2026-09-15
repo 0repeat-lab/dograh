@@ -1,9 +1,9 @@
 "use client";
 
+import { ArrowRight,Lock, Mail } from "lucide-react";
 import Link from "next/link";
 import { useState } from "react";
 import { toast } from "sonner";
-import { Mail, Lock, ArrowRight } from "lucide-react";
 
 import { loginApiV1AuthLoginPost } from "@/client/sdk.gen";
 import { AuthEnterpriseCTA } from "@/components/auth/AuthEnterpriseCTA";

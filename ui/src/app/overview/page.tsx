@@ -1,10 +1,9 @@
 "use client";
 
+import { ArrowRight, BookOpen, Brain, Bug,Database, MessageSquare, Phone, TrendingUp, Workflow, Wrench } from 'lucide-react';
 import Link from 'next/link';
-import { Workflow, Brain, Wrench, Phone, Database, FileText, TrendingUp, ArrowRight, Github, MessageSquare, BookOpen, Bug } from 'lucide-react';
 
 import { GitHubStarBadge } from '@/components/layout/GitHubStarBadge';
-import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { useAuth } from '@/lib/auth';
 import { cn } from '@/lib/utils';

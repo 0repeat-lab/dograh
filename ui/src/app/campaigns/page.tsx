@@ -1,6 +1,6 @@
 "use client";
 
-import { Plus, Megaphone, Rocket, PlayCircle } from 'lucide-react';
+import { Megaphone, PlayCircle,Plus, Rocket } from 'lucide-react';
 import { useRouter } from 'next/navigation';
 import { useEffect, useRef, useState } from 'react';
 
@@ -223,7 +223,7 @@ export default function CampaignsPage() {
                                                         <div
                                                             className="h-full bg-gradient-to-r from-cta to-cta/70 transition-all"
                                                             style={{
-                                                                width: `${(campaign.executed_count / campaign.total_queued_count) * 100}%`
+                                                                width: `${((campaign.executed_count ?? 0) / (campaign.total_queued_count ?? 0)) * 100}%`
                                                             }}
                                                         />
                                                     </div>

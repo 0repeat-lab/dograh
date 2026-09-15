@@ -1,5 +1,5 @@
-import { Suspense } from 'react';
 import { Bot, Sparkles, Zap } from 'lucide-react';
+import { Suspense } from 'react';
 
 import { getWorkflowsApiV1WorkflowFetchGet, listFoldersApiV1FolderGet } from '@/client/sdk.gen';
 import type { FolderResponse, WorkflowListResponse } from '@/client/types.gen';
