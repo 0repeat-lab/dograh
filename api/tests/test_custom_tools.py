@@ -384,6 +384,28 @@ class TestToolToFunctionSchema:
         assert schema["function"]["parameters"]["properties"] == {}
         assert schema["function"]["parameters"]["required"] == []
 
+    def test_transfer_disposition_is_not_exposed_as_a_model_argument(self):
+        """A configured transfer disposition is static tool configuration."""
+        tool = MockToolModel(
+            tool_uuid="transfer-uuid",
+            name="Transfer To Sales",
+            description="Transfer the caller to sales",
+            category="transfer_call",
+            definition={
+                "schema_version": 1,
+                "type": "transfer_call",
+                "config": {
+                    "destination": "+14155550123",
+                    "call_disposition": "transferred_to_sales",
+                },
+            },
+        )
+
+        schema = tool_to_function_schema(tool)
+
+        assert schema["function"]["parameters"]["properties"] == {}
+        assert schema["function"]["parameters"]["required"] == []
+
 
 class TestExecuteHttpTool:
     """Tests for execute_http_tool function."""
@@ -517,6 +539,12 @@ class TestExecuteHttpTool:
                     "timeout_ms": 5000,
                     "preset_parameters": [
                         {
+                            "name": "workflow_run_id",
+                            "type": "number",
+                            "value_template": "{{initial_context.workflow_run_id}}",
+                            "required": True,
+                        },
+                        {
                             "name": "phone_number",
                             "type": "string",
                             "value_template": "{{initial_context.phone_number}}",
@@ -555,15 +583,17 @@ class TestExecuteHttpTool:
                 tool,
                 arguments,
                 call_context_vars={
+                    "workflow_run_id": 12345,
                     "phone_number": "+14155550123",
                     "is_vip": "true",
                 },
-                gathered_context_vars={"customer_id": "42"},
+                gathered_context_vars={"customer_id": "42", "workflow_run_id": 999},
             )
 
             call_kwargs = mock_client.request.call_args.kwargs
             assert call_kwargs["json"] == {
                 "name": "John",
+                "workflow_run_id": 12345,
                 "phone_number": "+14155550123",
                 "customer_id": 42,
                 "is_vip": True,
@@ -1794,9 +1824,14 @@ class TestCustomToolManagerUnit:
     @pytest.mark.asyncio
     async def test_transfer_call_http_resolver_uses_transfer_context_destination(self):
         """HTTP resolver transfer_context.destination is passed to the provider."""
+        from api.services.workflow.pipecat_engine import PipecatEngine
         from api.services.workflow.pipecat_engine_custom_tools import CustomToolManager
 
         mock_engine = Mock()
+        mock_engine._is_realtime = False
+        mock_engine.queue_text_message = PipecatEngine.queue_text_message.__get__(
+            mock_engine
+        )
         mock_engine._workflow_run_id = 1
         mock_engine._call_context_vars = {}
         mock_engine._gathered_context = {"state": "TX"}
@@ -1933,9 +1968,14 @@ class TestCustomToolManagerUnit:
     @pytest.mark.asyncio
     async def test_transfer_call_resolver_failure_does_not_toggle_pipeline_mute(self):
         """Function-call muting covers resolver execution without pipeline state."""
+        from api.services.workflow.pipecat_engine import PipecatEngine
         from api.services.workflow.pipecat_engine_custom_tools import CustomToolManager
 
         mock_engine = Mock()
+        mock_engine._is_realtime = False
+        mock_engine.queue_text_message = PipecatEngine.queue_text_message.__get__(
+            mock_engine
+        )
         mock_engine._workflow_run_id = 1
         mock_engine._call_context_vars = {}
         mock_engine._gathered_context = {"state": "TX"}

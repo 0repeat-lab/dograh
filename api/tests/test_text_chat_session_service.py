@@ -356,7 +356,9 @@ async def test_opening_turn_without_llm_text_still_completes(monkeypatch):
 
 
 @pytest.mark.asyncio
-async def test_complete_text_chat_session_marks_user_hangup_and_enqueues(monkeypatch):
+async def test_complete_text_chat_session_marks_user_hangup_and_enqueues(
+    monkeypatch, no_disposition_mapping
+):
     started_at = datetime(2026, 8, 5, 12, 0, tzinfo=UTC)
     completed_at = started_at + timedelta(minutes=7, seconds=30)
     workflow_run = SimpleNamespace(
@@ -364,6 +366,7 @@ async def test_complete_text_chat_session_marks_user_hangup_and_enqueues(monkeyp
         gathered_context={"call_tags": ["existing"]},
         usage_info={"llm": {"prompt_tokens": 12}},
         created_at=started_at,
+        workflow=SimpleNamespace(organization_id=7),
     )
     session = SimpleNamespace(
         revision=4,
@@ -413,6 +416,7 @@ async def test_complete_text_chat_session_marks_user_hangup_and_enqueues(monkeyp
     assert update["gathered_context"] == {
         "call_disposition": "user_hangup",
         "mapped_call_disposition": "user_hangup",
+        "call_status": "user_hangup",
         "call_tags": ["existing", "user_hangup"],
     }
     assert update["usage_info"] == {

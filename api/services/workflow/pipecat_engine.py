@@ -1,4 +1,15 @@
-from typing import TYPE_CHECKING, Awaitable, Callable, Dict, Literal, Optional, Union
+from typing import (
+    TYPE_CHECKING,
+    Awaitable,
+    Callable,
+    Dict,
+    Iterable,
+    Literal,
+    Mapping,
+    Optional,
+    Sequence,
+    Union,
+)
 
 from pipecat.adapters.schemas.tools_schema import ToolsSchema
 from pipecat.frames.frames import (
@@ -9,6 +20,7 @@ from pipecat.frames.frames import (
     FunctionCallResultProperties,
     LLMContextFrame,
     TTSSpeakFrame,
+    UserIdleTimeoutUpdateFrame,
 )
 from pipecat.pipeline.worker import PipelineWorker
 from pipecat.processors.aggregators.llm_context import LLMContext
@@ -23,6 +35,7 @@ from api.errors.failure import (
     failure_metadata_for_processor,
     log_failure,
 )
+from api.schemas.workflow_configurations import CallDispositionOption
 from api.services.pipecat.audio_playback import play_audio
 from api.services.workflow.workflow_graph import Node, WorkflowGraph
 
@@ -41,6 +54,15 @@ from loguru import logger
 
 from api.services.managed_model_services import MPS_CORRELATION_ID_CONTEXT_KEY
 from api.services.workflow import pipecat_engine_callbacks as engine_callbacks
+from api.services.workflow.answer_handling import ANSWER_TERMINAL_REASONS, handle_answer
+from api.services.workflow.disposition_extraction import (
+    CALL_DISPOSITION_CONTEXT_KEY,
+    DispositionExtractionService,
+)
+from api.services.workflow.disposition_mapping import (
+    apply_disposition_mapping,
+    get_disposition_mapping,
+)
 from api.services.workflow.initial_context import GREETING_OVERRIDE_CONTEXT_KEY
 from api.services.workflow.mcp_tool_session import McpToolSession
 from api.services.workflow.pipecat_engine_context_composer import (
@@ -60,6 +82,31 @@ from api.services.workflow.tools.knowledge_base import (
     retrieve_from_knowledge_base,
 )
 from api.utils.template_renderer import render_template
+
+CALL_STATUS_CONTEXT_KEY = "call_status"
+
+# Gathered-context keys the engine records itself. Variable extraction merges
+# its results into the same dict, so these are held back from that merge.
+#
+# The call disposition is recorded only by the engine, which keeps its mapped
+# counterpart in sync for reporting, filters and external-PBX write-backs.
+_ENGINE_OWNED_CONTEXT_KEYS = frozenset(
+    {
+        CALL_DISPOSITION_CONTEXT_KEY,
+        "mapped_call_disposition",
+        CALL_STATUS_CONTEXT_KEY,
+        "call_tags",
+        "answer_supervisor",
+    }
+)
+
+# How long the terminal extraction gets before the call is disposed of without
+# it. In-pipeline cancellations funnel through `end_call_with_reason`, so this
+# coroutine is now the only thing that ends the pipeline: an LLM that never
+# answers would otherwise hold the call, its telephony channel and every
+# service behind it open indefinitely. Measured on the abrupt-hangup path at
+# p50 1.4s / p90 4.0s / max 21.3s, so this cuts off the tail and nothing else.
+FINAL_EXTRACTION_TIMEOUT_SECONDS = 10.0
 
 
 class PipecatEngine:
@@ -84,19 +131,22 @@ class PipecatEngine:
         embeddings_endpoint: Optional[str] = None,
         embeddings_api_version: Optional[str] = None,
         has_recordings: bool = False,
+        is_realtime: bool = False,
         context_compaction_enabled: bool = False,
         run_transition_variable_extraction_in_background: bool = True,
+        call_dispositions: Sequence[CallDispositionOption] | None = None,
     ):
         self.task = task
         self.llm = llm
+        self._is_realtime = is_realtime
         # LLM used for out-of-band inference (variable extraction, context
         # summarization). Falls back to the pipeline LLM when not provided.
         # In realtime mode the pipeline LLM is a speech-to-speech service
         # that does not implement run_inference, so a separate text LLM
         # must be passed in.
         self.inference_llm = inference_llm or llm
-        # Variable extraction can use a separately tagged managed-model client
-        # without rerouting normal conversation or context-summarization calls.
+        # Variable and disposition extraction can share a separately tagged
+        # managed-model client without rerouting normal conversation calls.
         self.variable_extraction_llm = variable_extraction_llm or self.inference_llm
         self.context = context
         self.workflow = workflow
@@ -106,6 +156,7 @@ class PipecatEngine:
         self._run_transition_variable_extraction_in_background = (
             run_transition_variable_extraction_in_background
         )
+        self._call_dispositions = tuple(call_dispositions or ())
         self._initialized = False
         self._call_disposed = False
         self._current_node: Optional[Node] = None
@@ -120,12 +171,18 @@ class PipecatEngine:
         # Will be set later in initialize() when we have
         # access to _context
         self._variable_extraction_manager = None
+        self._disposition_extraction_service: Optional[DispositionExtractionService] = (
+            None
+        )
 
         # Track current LLM reference text for TTS aggregation correction
         self._current_llm_generation_reference_text: str = ""
 
         # Controls whether user input should be muted
         self._mute_pipeline: bool = False
+        self.answer_supervisor = None
+        self._answer_user_aggregator = None
+        self._answer_idle_timeout = 0
 
         # Mute state for queued TTSSpeakFrames (transition speech, custom tool messages)
         # "idle" = not muting, "waiting" = speech queued, "playing" = bot speaking it
@@ -145,6 +202,14 @@ class PipecatEngine:
 
         # Cached organization ID (resolved lazily from workflow run)
         self._organization_id: Optional[int] = None
+
+        # The organization's disposition mapping, loaded once in initialize().
+        # Held on the engine rather than fetched where it is used because the
+        # two places that stamp a disposition -- set_call_disposition and
+        # end_call_with_reason -- run on the teardown path, where a DB round
+        # trip cannot be afforded (see end_call_with_reason). Empty means
+        # "no mapping", which is the identity translation.
+        self._disposition_mapping: dict[str, str] = {}
 
         # Open MCP tool sessions for this call, keyed by tool_uuid
         self._mcp_sessions: Dict[str, McpToolSession] = {}
@@ -211,8 +276,27 @@ class PipecatEngine:
             # Helper that encapsulates variable extraction logic
             self._variable_extraction_manager = VariableExtractionManager(self)
 
+            if self._call_dispositions:
+                self._disposition_extraction_service = DispositionExtractionService(
+                    llm=self.variable_extraction_llm,
+                    context=self.context,
+                    options=self._call_dispositions,
+                    template_context=self._call_context_vars,
+                )
+
             # Helper that encapsulates custom tool management
             self._custom_tool_manager = CustomToolManager(self)
+
+            # Loaded here, at call setup, so that stamping a disposition during
+            # teardown stays synchronous. A failure to load leaves the identity
+            # mapping in place: recording the untranslated disposition is worse
+            # than the mapped one but far better than failing the call.
+            try:
+                self._disposition_mapping = await get_disposition_mapping(
+                    await self._get_organization_id()
+                )
+            except Exception as e:
+                logger.error(f"Error loading the organization disposition mapping: {e}")
 
             # Open persistent MCP server sessions for this call (degrades on failure)
             await self._open_mcp_sessions()
@@ -229,9 +313,9 @@ class PipecatEngine:
     async def _update_llm_context(self, system_prompt: str, functions: list[dict]):
         """Update LLM settings with the composed system prompt and tool list."""
 
-        if functions:
-            tools_schema = ToolsSchema(standard_tools=functions)
-            self.context.set_tools(tools_schema)
+        # An empty node tool list must clear the previous node's tools before
+        # providers update or reconnect their session.
+        self.context.set_tools(ToolsSchema(standard_tools=functions))
 
         # For Gemini Live, set context on the LLM before _update_settings so that
         # _connect (triggered by reconnect) can read tools from it.
@@ -297,37 +381,30 @@ class PipecatEngine:
                             f"Failed to fetch transition audio {transition_speech_recording_id}"
                         )
                 elif transition_speech:
-                    logger.info(f"Playing transition speech: {transition_speech}")
-                    self._queued_speech_mute_state = "waiting"
-                    await self.task.queue_frame(
-                        TTSSpeakFrame(
-                            transition_speech,
-                            append_to_context=False,
-                            persist_to_logs=True,
-                        )
-                    )
+                    await self.queue_text_message(transition_speech, mute_user=True)
 
                 # Set context for the new node, so that when the function call result
                 # frame is received by LLMContextAggregator and an LLM generation
                 # is done, we have updated context and functions
                 await self.set_node(transition_to_node)
 
-                async def on_context_updated() -> None:
-                    """
-                    pipecat framework will run this function after the function call result has been updated in the context.
-                    This way, when we do set_node from within this function, and go for LLM completion with updated
-                    system prompts, the context is updated with function call result.
-                    """
-                    # FIXME: There is a potential race condition, when we generate LLM Completion from UserContextAggregator
-                    # with FunctionCallResultFrame and we call end_call_with_reason where we queue EndFrame or CancelFrame.
-                    # If EndFrame reaches the LLM Processor before the ContextFrame, we might never run generation which
-                    # might be intended
+                is_end_node = self.workflow.nodes[transition_to_node].is_end
+                if is_end_node:
+                    # The tool result triggers the end node's closing response.
+                    # Arm before returning it: realtime can begin speaking before
+                    # the aggregator's on_context_updated callback runs.
+                    self.arm_speech_playback()
+                    self._mute_pipeline = True
 
-                    # Queue EndFrame if we just transitioned to EndNode
-                    if self._current_node.is_end:
-                        await self.end_call_with_reason(
-                            EndTaskReason.USER_QUALIFIED.value
-                        )
+                async def on_context_updated() -> None:
+                    """Finish an end node after its response reaches the caller."""
+                    if is_end_node:
+                        # This callback runs in its own task, leaving input audio,
+                        # model generation, and transport playback free to continue.
+                        # EndFrame closes realtime sessions; transport draining
+                        # alone cannot recover audio the model hasn't sent yet.
+                        await self.wait_for_speech_playback()
+                        await self.end_call_with_reason(EndTaskReason.END_CALL.value)
 
                 result = {"status": "done"}
 
@@ -431,8 +508,10 @@ class PipecatEngine:
         self.llm.register_function("retrieve_from_knowledge_base", retrieve_kb_func)
 
     async def _perform_variable_extraction_if_needed(
-        self, node: Optional[Node], run_in_background: bool = True
-    ) -> None:
+        self,
+        node: Optional[Node],
+        run_in_background: bool = True,
+    ) -> Optional[dict]:
         """Perform variable extraction if the node has extraction enabled.
 
         Args:
@@ -448,14 +527,25 @@ class PipecatEngine:
         parent_context = self._get_otel_context()
 
         extraction_prompt = self._format_prompt(node.extraction_prompt)
+        node_variables = [
+            variable
+            for variable in node.extraction_variables
+            if variable.name not in _ENGINE_OWNED_CONTEXT_KEYS
+        ]
+        if not node_variables:
+            logger.debug(
+                f"No LLM-derived variables configured for node: {node.name}; "
+                "skipping variable extraction"
+            )
+            return None
         extraction_variables = [
             v.model_copy(update={"prompt": self._format_prompt(v.prompt)})
             if v.prompt
             else v
-            for v in node.extraction_variables
+            for v in node_variables
         ]
 
-        async def _do_extraction():
+        async def _do_extraction() -> Optional[dict]:
             try:
                 logger.debug(f"Starting variable extraction for node: {node.name}")
                 extracted_data = (
@@ -469,8 +559,32 @@ class PipecatEngine:
                         f"{type(extracted_data).__name__} instead of dict, "
                         f"skipping update. Data: {extracted_data}"
                     )
-                    return
-                self._gathered_context.update(extracted_data)
+                    return None
+                requested_names = {variable.name for variable in extraction_variables}
+                unexpected_names = extracted_data.keys() - requested_names
+                if unexpected_names:
+                    logger.warning(
+                        f"Variable extraction for node {node.name} returned "
+                        f"unrequested keys {sorted(unexpected_names)}; ignoring them"
+                    )
+                extracted_data = {
+                    key: value
+                    for key, value in extracted_data.items()
+                    if key in requested_names
+                }
+                # Extraction variable names are author-supplied and nothing
+                # validates them against the keys the engine owns. Let one
+                # through and it would desynchronise the call's outcome:
+                # `call_disposition` would carry the extracted value while
+                # `mapped_call_disposition` -- which is what reporting, filters
+                # and the PBX write-back all read -- kept the recorded one.
+                self._gathered_context.update(
+                    {
+                        key: value
+                        for key, value in extracted_data.items()
+                        if key not in _ENGINE_OWNED_CONTEXT_KEYS
+                    }
+                )
                 extracted_variables = self._gathered_context.setdefault(
                     "extracted_variables", {}
                 )
@@ -478,6 +592,7 @@ class PipecatEngine:
                 logger.debug(
                     f"Variable extraction completed for node: {node.name}. Extracted: {extracted_data}"
                 )
+                return extracted_data
             except Exception as e:
                 metadata = failure_metadata_for_processor(self.variable_extraction_llm)
                 log_failure(
@@ -491,6 +606,7 @@ class PipecatEngine:
                     workflow_run_id=self._workflow_run_id,
                     node_name=node.name,
                 )
+                return None
 
         if run_in_background:
             logger.debug(
@@ -501,11 +617,12 @@ class PipecatEngine:
             )
             self._pending_extraction_tasks.add(task)
             task.add_done_callback(self._pending_extraction_tasks.discard)
+            return None
         else:
             logger.debug(
                 f"Performing synchronous variable extraction for node: {node.name}"
             )
-            await _do_extraction()
+            return await _do_extraction()
 
     async def _await_pending_extractions(self, timeout: float = 30.0) -> None:
         """Await all in-flight background extraction tasks.
@@ -543,7 +660,7 @@ class PipecatEngine:
                 f"Incomplete: {incomplete}"
             )
 
-    async def flush_variable_extraction(self) -> None:
+    async def flush_variable_extraction(self) -> Optional[dict]:
         """Refresh extracted variables without marking the call finalized.
 
         This operation is intentionally repeatable. Transfer routing and
@@ -551,12 +668,13 @@ class PipecatEngine:
         failed transfer can return control to the agent and gather more input.
         """
         await self._await_pending_extractions()
-        await self._perform_variable_extraction_if_needed(
-            self._current_node, run_in_background=False
+        return await self._perform_variable_extraction_if_needed(
+            self._current_node,
+            run_in_background=False,
         )
 
     async def perform_final_variable_extraction(self) -> None:
-        """Perform the one-shot extraction used during call disposal.
+        """Perform the one-shot variable extraction used during call disposal.
 
         Awaits any background extractions still running from previous nodes,
         then runs the current node's extraction inline. Idempotency prevents
@@ -574,7 +692,7 @@ class PipecatEngine:
         try:
             self.context.set_otel_span_name(f"llm-{node.name}")
         except AttributeError:
-            logger.warning(f"context has no set_otel_span_name method")
+            logger.warning("context has no set_otel_span_name method")
 
         # Register transition functions if not an end node
         if not node.is_end:
@@ -660,21 +778,28 @@ class PipecatEngine:
         # Summarize context in background after non-start node transitions
         # to clean up tool calls from previous nodes
         if previous_node_id is not None and self._context_summarization_manager:
-            self._context_summarization_manager.start()
+            await self._context_summarization_manager.start()
 
     async def _handle_start_node(self, node: Node) -> None:
-        """Handle start node execution."""
-        # Check if delayed start is enabled
-        if node.delayed_start:
-            # Use configured duration or default to 3 seconds
-            delay_duration = node.delayed_start_duration or 2.0
-            logger.debug(
-                f"Delayed start enabled - waiting {delay_duration} seconds before speaking"
-            )
-            await asyncio.sleep(delay_duration)
-
-        # Setup LLM context with prompts and functions.
+        """Set up context immediately; the answer supervisor owns initial listening."""
         await self._setup_llm_context(node)
+
+    def set_answer_supervisor(self, supervisor, user_aggregator, idle_timeout: float):
+        self.answer_supervisor = supervisor
+        self._answer_user_aggregator = user_aggregator
+        self._answer_idle_timeout = idle_timeout
+
+    async def handle_answer_supervision(self):
+        async def update_idle_timeout(timeout):
+            await self._answer_user_aggregator.queue_frame(
+                UserIdleTimeoutUpdateFrame(
+                    timeout=self._answer_idle_timeout if timeout is None else timeout,
+                )
+            )
+
+        await handle_answer(
+            self, self.answer_supervisor, update_idle_timeout=update_idle_timeout
+        )
 
     def get_node_greeting(self, node_id: str) -> Optional[tuple[str, Optional[str]]]:
         """Return the greeting info for a node, or None if not configured.
@@ -766,6 +891,9 @@ class PipecatEngine:
                             transcript=result.transcript,
                             append_to_context=True,
                         )
+                        await self._open_realtime_after_recorded_greeting(
+                            result.transcript
+                        )
                         return "greeting"
                     logger.warning(
                         f"Failed to fetch audio greeting {greeting_value}, "
@@ -794,6 +922,34 @@ class PipecatEngine:
 
         return "none"
 
+    async def _open_realtime_after_recorded_greeting(
+        self, transcript: str | None
+    ) -> None:
+        """Hand the opening turn to a realtime service after a recording.
+
+        Realtime providers seed their session, and open their caller-audio
+        gate, off the opening turn the engine gives them. A recorded greeting
+        is queued straight to the output transport, so without this the
+        session stays unseeded and Gemini Live discards every caller frame -
+        the bot greets, then never answers.
+
+        The transcript goes with it because the handoff happens while the
+        recording is still playing: the assistant aggregator only commits it
+        to ``LLMContext`` once playback drains, which is too late to be part
+        of the provider's session seed. Waiting for that commit instead would
+        leave the caller unheard for the length of the greeting, and an
+        interruptible node does not mute them.
+
+        A no-op for text LLMs, which hold no session and re-read the context
+        on every generation.
+        """
+        handle_prerecorded_greeting = getattr(
+            self.llm, "handle_prerecorded_greeting", None
+        )
+        if handle_prerecorded_greeting is None:
+            return
+        await handle_prerecorded_greeting(self.context, transcript)
+
     async def _handle_end_node(self, node: Node) -> None:
         """Handle end node execution."""
         # Setup LLM context with prompts and functions.
@@ -804,12 +960,12 @@ class PipecatEngine:
         # Setup LLM context with prompts and functions.
         await self._setup_llm_context(node)
 
-    def record_call_disposition(self, disposition: str) -> None:
+    def set_call_disposition(self, disposition: str) -> None:
         """Fix the call's disposition ahead of teardown.
 
-        ``end_call_with_reason`` falls back to its own ``reason`` only when no
-        disposition has been recorded, so an outcome already known to be final
-        before the pipeline winds down has to be stamped here.
+        ``end_call_with_reason`` falls back to its own ``call_status`` only when
+        no disposition has been recorded, so an outcome already known to be
+        final before the pipeline winds down has to be stamped here.
 
         An external-PBX transfer is the case that needs it. The PBX pulls the
         customer off our media leg within ~100ms of its transfer API returning,
@@ -819,16 +975,87 @@ class PipecatEngine:
         no-op, so without this the completed transfer is recorded as a user
         hangup.
         """
-        self._gathered_context["call_disposition"] = disposition
-        self._gathered_context["mapped_call_disposition"] = disposition
+        self._gathered_context[CALL_DISPOSITION_CONTEXT_KEY] = disposition
+        self._gathered_context["mapped_call_disposition"] = self.map_disposition(
+            disposition
+        )
+
+    def refine_call_disposition(
+        self,
+        fallback_disposition: str,
+        extracted_disposition: str | None,
+    ) -> None:
+        """Replace the mechanical fallback with a classified business outcome.
+
+        ``end_call_with_reason`` initially copies ``call_status`` into
+        ``call_disposition``. Only the dedicated disposition service may refine
+        it; ordinary node extractions are deliberately not consulted.
+
+        A no-op whenever the fallback changed while classification was running
+        or the service returned no supported disposition.
+        """
+        if (
+            not extracted_disposition
+            or self._gathered_context.get(CALL_DISPOSITION_CONTEXT_KEY)
+            != fallback_disposition
+        ):
+            return
+
+        logger.debug(
+            f"Refining call disposition: {fallback_disposition} -> "
+            f"{extracted_disposition}"
+        )
+        self.set_call_disposition(extracted_disposition)
+        self.record_call_tags([extracted_disposition])
+
+    def map_disposition(self, disposition: str | None) -> str | None:
+        """Translate ``disposition`` through the organization's mapping.
+
+        Public because the external-PBX transfer path records the call's outcome
+        on the PBX before it is stamped here -- it needs the same translation
+        this engine will apply, and must not resolve it a second way.
+        """
+        return apply_disposition_mapping(self._disposition_mapping, disposition)
+
+    def record_context(self, values: Mapping[str, object]) -> None:
+        """Merge caller-supplied values into the call's gathered context.
+
+        The engine owns this dict for the life of the call. Teardown handlers
+        add to it through here rather than mutating a snapshot they took
+        earlier, so there is one copy of the truth to read and persist at the
+        end instead of several that have to be reconciled.
+        """
+        self._gathered_context.update(values)
+
+    def record_call_tags(self, tags: Iterable[str] = ()) -> None:
+        """Add call tags, along with any carried by ``tag_*`` context keys.
+
+        A workflow author can name an extraction variable ``tag_something`` to
+        turn its value into a call tag. Those arrive through the extraction
+        merge, so promoting them belongs here, next to the tags the engine
+        records itself. Idempotent, so teardown paths may call it more than
+        once.
+        """
+        call_tags = self._gathered_context.setdefault("call_tags", [])
+        promoted = [
+            value
+            for key, value in self._gathered_context.items()
+            if key.startswith("tag_") and isinstance(value, str)
+        ]
+        for tag in (*tags, *promoted):
+            if tag and tag not in call_tags:
+                call_tags.append(tag)
 
     async def end_call_with_reason(
         self,
-        reason: str,
+        call_status: str,
         abort_immediately: bool = False,
     ):
-        """
-        Centralized method to end the call with disposition mapping
+        """End the pipeline and record its status and business outcome.
+
+        Args:
+            call_status: Observable call-termination mechanism.
+            abort_immediately: Queue a cancellation instead of a graceful end.
         """
         if self._call_disposed:
             logger.debug(f"Call already Disposed: {self._call_disposed}")
@@ -839,48 +1066,115 @@ class PipecatEngine:
         # Mute the pipeline
         self._mute_pipeline = True
 
-        if reason not in (
-            EndTaskReason.PIPELINE_ERROR.value,
-            EndTaskReason.VOICEMAIL_DETECTED.value,
-        ):
-            # Flush in-flight + current-node extractions synchronously before ending
-            await self.perform_final_variable_extraction()
+        # The call status is the observed termination mechanism. It is never
+        # generated by an LLM.
+        self._gathered_context[CALL_STATUS_CONTEXT_KEY] = call_status
 
-        frame_to_push = (
-            CancelFrame(reason=reason) if abort_immediately else EndFrame(reason=reason)
+        # Prefer a business outcome already recorded during the call -- by an
+        # end-call tool or a transfer. Otherwise the mechanical status is the
+        # disposition fallback.
+        #
+        # Stamped before the extraction below rather than after it, so that a
+        # call always carries an outcome even when that extraction times out or
+        # comes back with nothing. `refine_call_disposition` upgrades it once
+        # the extraction has actually landed.
+        recorded_disposition = self._gathered_context.get(
+            CALL_DISPOSITION_CONTEXT_KEY, ""
+        )
+        should_extract_disposition = not bool(recorded_disposition)
+        call_disposition = (
+            recorded_disposition or self._gathered_context[CALL_STATUS_CONTEXT_KEY]
+        )
+        self._gathered_context[CALL_DISPOSITION_CONTEXT_KEY] = call_disposition
+        # A dict lookup against the mapping loaded in `initialize`, not a DB
+        # round trip -- see `_disposition_mapping`.
+        self._gathered_context["mapped_call_disposition"] = self.map_disposition(
+            call_disposition
         )
 
-        # Record the call disposition: prefer one extracted from the conversation,
-        # otherwise fall back to the disconnect reason.
-        call_disposition = self._gathered_context.get("call_disposition", "") or reason
-        self._gathered_context["call_disposition"] = call_disposition
-        self._gathered_context["mapped_call_disposition"] = call_disposition
+        # Tagged with the untranslated disposition. Tags are Dograh's own
+        # vocabulary -- `user_speech`, `not_connected` -- and are what the
+        # mapping-less view of a run is read from.
+        self.record_call_tags([call_disposition])
 
-        if call_disposition:
-            call_tags = self._gathered_context.get("call_tags", [])
-            if call_disposition not in call_tags:
-                call_tags.append(call_disposition)
-            self._gathered_context["call_tags"] = call_tags
+        if call_status not in (
+            EndTaskReason.PIPELINE_ERROR.value,
+            EndTaskReason.VOICEMAIL_DETECTED.value,
+            *ANSWER_TERMINAL_REASONS,
+        ):
+            # Finish ordinary node extraction, then classify the call outcome
+            # independently when the mechanical status is only a fallback.
+            # Bound both calls together so a stuck LLM cannot hold the call open.
+            extracted_disposition = None
+            try:
+                async with asyncio.timeout(FINAL_EXTRACTION_TIMEOUT_SECONDS):
+                    await self.perform_final_variable_extraction()
+                    if (
+                        should_extract_disposition
+                        and self._disposition_extraction_service is not None
+                    ):
+                        extracted_disposition = (
+                            await self._disposition_extraction_service.extract(
+                                parent_context=self._get_otel_context(),
+                                organization_id=self._organization_id,
+                                workflow_run_id=self._workflow_run_id,
+                            )
+                        )
+            except asyncio.TimeoutError:
+                logger.warning(
+                    f"Final extraction did not finish within "
+                    f"{FINAL_EXTRACTION_TIMEOUT_SECONDS}s; keeping the recorded "
+                    f"disposition '{call_disposition}'"
+                )
+            if should_extract_disposition:
+                self.refine_call_disposition(
+                    call_disposition,
+                    extracted_disposition,
+                )
 
-        # Hangup strategies run while serializing the terminal frame. Persist
-        # the final extracted values first so external-PBX adapters can apply
-        # workflow lead-field mappings before terminating the customer leg.
-        try:
-            await db_client.update_workflow_run(
-                run_id=self._workflow_run_id,
-                gathered_context=self._gathered_context,
-            )
-        except Exception as exc:
-            # Call teardown must never be held hostage by an enrichment write.
-            logger.warning(
-                f"Could not persist final gathered context before hangup: {exc}"
-            )
+        frame_to_push = (
+            CancelFrame(reason=call_status)
+            if abort_immediately
+            else EndFrame(reason=call_status)
+        )
 
+        # No persist here. This used to write the gathered context before
+        # queueing the frame, because the pipeline could be cancelled out from
+        # under this coroutine and `on_pipeline_finished` would then write a
+        # snapshot taken before the extraction landed. In-pipeline
+        # cancellations now funnel back through this method (see
+        # TerminationFunnelProcessor), so the frame below is what ends the
+        # pipeline and `on_pipeline_finished` cannot run until it does -- one
+        # write, of the finished context, is enough. Hangup strategies read
+        # only keys recorded at call setup or at transfer time, never the
+        # terminal extraction.
         logger.debug(
-            f"Finishing run with reason: {reason}, disposition: {call_disposition} "
+            f"Finishing run with call status: {call_status}, disposition: "
+            f"{self._gathered_context.get(CALL_DISPOSITION_CONTEXT_KEY, call_disposition)} "
             f"queueing frame {frame_to_push}"
         )
         await self.task.queue_frame(frame_to_push)
+
+    async def queue_text_message(
+        self, text: str, *, append_to_context: bool = False, mute_user: bool = False
+    ) -> bool:
+        """Queue edge/tool speech only when the pipeline has a TTS service.
+
+        Realtime services own their responses. Skip before arming mute or
+        reporting queued playback: discarded text cannot produce a completion
+        event to release either wait. Opening greetings use a separate path.
+        """
+        if self._is_realtime:
+            logger.debug("Skipping configured text speech in realtime mode")
+            return False
+        if mute_user:
+            self._queued_speech_mute_state = "waiting"
+        await self.task.queue_frame(
+            TTSSpeakFrame(
+                text, append_to_context=append_to_context, persist_to_logs=True
+            )
+        )
+        return True
 
     def arm_speech_playback(self) -> None:
         """Start tracking the next piece of speech queued to the transport.
@@ -1054,7 +1348,13 @@ class PipecatEngine:
         return self._call_disposed
 
     async def get_gathered_context(self) -> dict:
-        """Get the gathered context including extracted variables."""
+        """Read the call's gathered context.
+
+        A copy, so a caller cannot edit the engine's state by accident: writes
+        go through ``record_context`` / ``record_call_tags`` / the disposition
+        recorders. Still shallow -- nested values are shared -- so treat the
+        result as read-only rather than as an isolated snapshot.
+        """
         return self._gathered_context.copy()
 
     async def _open_mcp_sessions(self) -> None:
